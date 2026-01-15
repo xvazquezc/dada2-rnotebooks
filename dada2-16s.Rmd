@@ -1,0 +1,485 @@
+---
+title: "Project ID: <insert Project ID>"
+output: html_notebook
+params:
+  raw_data: "raw"
+  fwd_seq: "AAACTYAAAKGAATTGRCGG"
+  rev_seq: "ACGGGCGGTGWGTRC"
+  fwd_pat: "_L001_R1_001.fastq.gz"
+  rev_pat: "_L001_R2_001.fastq.gz"
+  read_len: 300 #DO NOT QUOTE
+  cpus: 8 #DO NOT QUOTE
+  cutadapt_path: "/apps/z_install_tree/linux-rocky8-ivybridge/gcc-12.2.0/cutadapt-4.3-h7up35wj3xjo6pfjkkevxbkqd764obtw/bin/cutadapt"
+  cdhit_path: "/apps/z_install_tree/linux-rocky8-ivybridge/gcc-12.2.0/cdhit-4.8.1-d3fwnap7tmcfkp2h46bxgntfddriozt5/bin" #to the binaries folder not the executable
+  db_train: "/srv/scratch/ferrari/utils/silva_nr99_v138.1_train_set.fa.gz"
+  db_assign: "/home/xabi/Desktop/burnslab/first_amplicon/silva_species_assignment_v138.1.fa.gz"
+---
+
+# Setup 
+
+## Load libraries
+```{r libraries}
+library(magrittr)
+packageVersion("magrittr")
+library(dada2)
+packageVersion("dada2")
+library(ShortRead)
+packageVersion("ShortRead")
+library(Biostrings)
+packageVersion("Biostrings")
+library(tibble)
+packageVersion("tibble")
+library(dplyr)
+packageVersion("dplyr")
+library(tidyr)
+packageVersion("tidyr")
+library(stringr)
+packageVersion("stringr")
+library(phylotools)
+packageVersion("phylotools")
+library(phyloseq)
+packageVersion("phyloseq")
+```
+
+
+```{r files}
+path <- params$raw_data  ## directory containing the fastq files.
+list.files(path, recursive = F)
+```
+
+## Check Phred scores
+```{r phred}
+fq_qa <- qa(path, type = "fastq")
+myscores <- fq_qa@.srlist$baseQuality %>% filter(count > 0) %>% distinct(score) %>% pull(score)
+qual_list <- as(PhredQuality(myscores), "IntegerList") %>% unlist()
+qual_list
+
+if (length(qual_list) < 5) {
+  phred_scores = "binned"
+} else {
+  phred_scores = "standard continuous"
+}
+
+```
+
+The Phred scores in the FastQ files are: `r qual_list`. Most likely the data contains `r phred_scores` Phred scores.
+
+# Processing
+
+## Identify primers
+```{r}
+fnFs <- sort(list.files(path, pattern = params$fwd_pat, full.names = TRUE))
+fnRs <- sort(list.files(path, pattern = params$rev_pat, full.names = TRUE))
+```
+
+
+```{r set_primers}
+FWD <- params$fwd_seq  ## CHANGE ME to your forward primer sequence
+REV <- params$rev_seq  ## CHANGE ME...
+```
+
+
+```{r orient}
+allOrients <- function(primer) {
+    # Create all orientations of the input sequence
+    require(Biostrings)
+    dna <- DNAString(primer)  # The Biostrings works w/ DNAString objects rather than character vectors
+    orients <- c(Forward = dna,
+                 Complement = Biostrings::complement(dna),
+                 Reverse = Biostrings::reverse(dna), 
+                 RevComp = Biostrings::reverseComplement(dna))
+    return(sapply(orients, toString))  # Convert back to character vector
+}
+FWD.orients <- allOrients(FWD)
+REV.orients <- allOrients(REV)
+FWD.orients
+```
+
+
+```{r filterAndTrim}
+fnFs.filtN <- file.path(path, "filtN", basename(fnFs)) # Put N-filterd files in filtN/ subdirectory
+fnRs.filtN <- file.path(path, "filtN", basename(fnRs))
+filterAndTrim(fnFs, fnFs.filtN, fnRs, fnRs.filtN, maxN = 0, multithread = params$cpus) ### mc.cores added
+```
+
+
+```{r primerHits}
+primerHits <- function(primer, fn) {
+    # Counts number of reads in which the primer is found
+    nhits <- vcountPattern(primer, sread(readFastq(fn)), fixed = FALSE)
+    return(sum(nhits > 0))
+}
+rbind(FWD.ForwardReads = sapply(FWD.orients, primerHits, fn = fnFs.filtN[[1]]), 
+    FWD.ReverseReads = sapply(FWD.orients, primerHits, fn = fnRs.filtN[[1]]), 
+    REV.ForwardReads = sapply(REV.orients, primerHits, fn = fnFs.filtN[[1]]), 
+    REV.ReverseReads = sapply(REV.orients, primerHits, fn = fnRs.filtN[[1]]))
+```
+
+## Remove Primers
+```{r cutadapt_set}
+cutadapt <- params$cutadapt_path # CHANGE ME to the cutadapt path on your machine
+system2(cutadapt, args = "--version") # Run shell commands from R
+```
+
+
+```{r cutadapt_run}
+path.cut <- file.path(path, "cutadapt")
+if(!dir.exists(path.cut)) dir.create(path.cut)
+fnFs.cut <- file.path(path.cut, basename(fnFs))
+fnRs.cut <- file.path(path.cut, basename(fnRs))
+
+FWD.RC <- dada2:::rc(FWD)
+REV.RC <- dada2:::rc(REV)
+# Trim FWD and the reverse-complement of REV off of R1 (forward reads)
+R1.flags <- paste("-g", FWD, "-a", REV.RC) 
+# Trim REV and the reverse-complement of FWD off of R2 (reverse reads)
+R2.flags <- paste("-G", REV, "-A", FWD.RC) 
+# Run Cutadapt
+for(i in seq_along(fnFs)) {
+  system2(cutadapt, args = c(R1.flags, R2.flags, "-n", 2, # -n 2 required to remove FWD and REV from reads
+                             "-j", "0", #autodetect CPUS
+                             "-o", fnFs.cut[i], "-p", fnRs.cut[i], # output files
+                             "-m", "10:10", #discard any read shorter than LEN:LEN2
+                             "--nextseq-trim=20", #trim polyG
+                             fnFs.filtN[i], fnRs.filtN[i])) # input files
+}
+```
+
+
+```{r primerhitsbind}
+rbind(FWD.ForwardReads = sapply(FWD.orients, primerHits, fn = fnFs.cut[[1]]), 
+    FWD.ReverseReads = sapply(FWD.orients, primerHits, fn = fnRs.cut[[1]]), 
+    REV.ForwardReads = sapply(REV.orients, primerHits, fn = fnFs.cut[[1]]), 
+    REV.ReverseReads = sapply(REV.orients, primerHits, fn = fnRs.cut[[1]]))
+```
+
+```{r sample_names}
+# Forward and reverse fastq filenames have the format:
+cutFs <- sort(list.files(path.cut, pattern = params$fwd_pat, full.names = TRUE))
+cutRs <- sort(list.files(path.cut, pattern = params$rev_pat, full.names = TRUE))
+
+# Extract sample names, assuming filenames have format:
+get.sample.name <- function(fname) {
+  stringr::str_remove(basename(fname), "-MEL17453A[:digit:]{1,}-AAHLCF3M5_S[:digit:]{1,}_L001_R1_001\\.fastq\\.gz")
+}
+sample.names <- get.sample.name( cutFs )
+head(sample.names)
+sample.names
+```
+
+
+## Inspect read quality profiles
+```{r qcFwd}
+plotQualityProfile(cutFs[1:2]) + 
+    ggplot2::scale_x_continuous(breaks = seq(0, params$read_len, 25))
+```
+
+
+```{r qcRev}
+plotQualityProfile(cutRs[1:2]) + 
+    ggplot2::scale_x_continuous(breaks = seq(0, params$read_len, 25))
+```
+
+
+## Filter and trim
+```{r listFilt}
+filtFs <- file.path(path.cut, "filtered", basename(cutFs))
+filtRs <- file.path(path.cut, "filtered", basename(cutRs))
+```
+
+```{r filterAndTrim_quality}
+out <- filterAndTrim(cutFs, filtFs, cutRs, filtRs, maxN = 0, maxEE = c(3, 5),  truncLen = c(275,230),
+    truncQ = 2, minLen = 150, rm.phix = TRUE, compress = TRUE, multithread = params$cpus)  # on windows, set multithread = FALSE
+
+out
+```
+
+
+## Learn the Error Rates
+
+For binned quality scores, you need to create an alternate to the `loessErrfun` that `learnErrors` usually uses:
+```{r errfun}
+if (phred_scores == "binned") {
+  binned_error_fun <- makeBinnedQualErrfun(qual_list)
+} else {
+  binned_error_fun <- loessErrfun
+}
+```
+
+
+```{r learnErrorsF}
+errF <- learnErrors(filtFs, 
+                    errorEstimationFunction = binned_error_fun,
+                    multithread = params$cpus)
+```
+
+
+```{r learnErrorsR}
+errR <- learnErrors(filtRs, 
+                    errorEstimationFunction = binned_error_fun,
+                    multithread = params$cpus)
+```
+
+
+```{r plotErrorsF}
+plotErrors(errF, nominalQ = TRUE)
+```
+
+```{r plotErrorsR}
+plotErrors(errR, nominalQ = TRUE)
+```
+
+## Dereplicate identical reads
+```{r derep}
+derepFs <- derepFastq(filtFs[stringr::str_detect(filtFs, "No_Template_Control*", negate = TRUE)], verbose = TRUE)
+derepRs <- derepFastq(filtRs[stringr::str_detect(filtRs, "No_Template_Control*", negate = TRUE)], verbose = TRUE)
+# Name the derep-class objects by the sample names
+names(derepFs) <- sample.names[stringr::str_detect(filtFs, "No_Template_Control*", negate = TRUE)]
+names(derepRs) <- sample.names[stringr::str_detect(filtRs, "No_Template_Control*", negate = TRUE)]
+```
+
+
+## Sample Inference
+```{r remove_errors}
+dadaFs <- dada(derepFs, err = errF, multithread = params$cpus)
+dadaRs <- dada(derepRs, err = errR, multithread = params$cpus)
+```
+
+
+## Merge paired reads
+```{r mergePairs}
+mergers <- mergePairs(dadaFs, derepFs, dadaRs, derepRs, verbose=TRUE, justConcatenate = FALSE)
+rm(derepFs)
+rm(derepRs)
+```
+
+
+## Construct Sequence Table
+```{r makeSequenceTable}
+seqtab <- makeSequenceTable(mergers)
+dim(seqtab)
+```
+
+## Remove chimeras
+```{r removeBimeraDenovo}
+seqtab.nochim <- removeBimeraDenovo(seqtab, method="consensus", multithread = params$cpus, verbose=TRUE)
+```
+
+```{r chimera_prop}
+sum(seqtab.nochim)/sum(seqtab)
+```
+
+
+```{r sizes}
+table(nchar(getSequences(seqtab.nochim)))
+```
+
+```{r}
+write.csv(seqtab.nochim, "seqtab.nochim.csv")
+```
+
+
+## "Manual" collapse
+```{r write_nochim_fasta}
+data.frame(seq.name = colnames(seqtab.nochim),
+           seq.text = colnames(seqtab.nochim)) %>% 
+  mutate(seq.name = paste0(">", seq.name)) %>% 
+  write.table("seqtab.nochim.fasta", sep = "\n", col.names = F, row.names = F, quote = F)
+```
+
+```{r cdhit_info}
+cdhitest <- paste0(params$cdhit_path, "/cd-hit-est") # CHANGE ME to the cutadapt path on your machine
+clstr2txt <- paste0(params$cdhit_path, "/clstr2txt.pl")
+system2(cdhitest, args = "--version") # Run shell commands from R
+```
+
+
+```{r cd-hit-est}
+system2(cdhitest, args = c("-i", "seqtab.nochim.fasta",
+                        "-o", "seqtab.nochim.collapse.fasta",
+                        "-T", params$cpus,
+                        "-M", "0",
+                        "-c", "1",
+                        "-d", "0",
+                        "-g", "1"))
+```
+
+
+```{r clstr2txt}
+system2(clstr2txt, 
+        args = c("seqtab.nochim.collapse.fasta.clstr"),
+        stdout = "seqtab.nochim.collapse.fasta.tsv")
+```
+
+
+```{r load_clstr}
+collapse_clstr <- read.table("seqtab.nochim.collapse.fasta.tsv",
+           sep = "\t", header = T) %>% 
+  select(id, clstr, clstr_rep)
+
+clstr_reps <- collapse_clstr %>% 
+  filter(clstr_rep == 1) %>% 
+  select(-clstr_rep)
+```
+
+
+```{r seqtab_clstr}
+seqtab.clstr <- seqtab.nochim %>% 
+  as.data.frame() %>% 
+  tibble::rownames_to_column(var = "sample") %>%
+  tidyr::pivot_longer(cols = -sample, names_to = "ASV", values_to = "counts") %>% 
+  left_join(collapse_clstr, by = c("ASV" = "id"), multiple = "all") %>% 
+  select(sample, clstr, counts) %>% 
+  group_by(sample, clstr) %>% 
+  summarise(sum = sum(counts)) %>% 
+  ungroup()
+```
+
+```{r seqtab_nochim_collapse}
+seqtab.nochim.collapse <- seqtab.clstr %>% 
+  left_join(clstr_reps, by = "clstr") %>% 
+  select(sample, id, sum) %>% 
+  tidyr::pivot_wider(names_from = id, values_from = sum, values_fill = 0, names_repair = "minimal") %>% 
+  tibble::column_to_rownames(var = "sample") %>% 
+  data.matrix()
+```
+
+
+## Track reads through the pipeline
+```{r trackReads}
+require(magrittr)
+require(dplyr)
+require(tibble)
+
+getN <- function(x) sum(getUniques(x))
+out2 <- out
+rownames(out2) <- unname(sapply(rownames(out2), get.sample.name))
+
+track <- tibble::as_tibble(out2, rownames = "Sample") %>% 
+  full_join(tibble::as_tibble(sapply(dadaFs, getN), rownames = "Sample"), by = "Sample") %>% 
+               full_join(tibble::as_tibble(sapply(dadaRs, getN), rownames = "Sample"), by = "Sample") %>% 
+               full_join(tibble::as_tibble(sapply(mergers, getN), rownames = "Sample"), by = "Sample") %>% 
+               full_join(tibble::as_tibble(rowSums(seqtab.nochim), rownames = "Sample"), by = "Sample") %>% 
+               full_join(tibble::as_tibble(rowSums(seqtab.nochim.collapse), rownames = "Sample"), by = "Sample")
+# If processing a single sample, remove the sapply calls: e.g. replace
+# sapply(dadaFs, getN) with getN(dadaFs)
+colnames(track) <- c("Sample", "input", "filtered", "denoisedF", "denoisedR", "merged", "nonchim", "collapsed")
+#rownames(track) <- sample.names
+head(track)
+track
+
+as.data.frame(track) %>%
+  tibble::rownames_to_column(var = "sample") %>%
+  select(sample, everything()) %>%
+  write.table("read_tracking.tsv", row.names = F, sep = "\t", col.names = T)
+```
+
+
+## Assign taxonomy
+```{r assignTaxonomy}
+taxa <- assignTaxonomy(seqtab.nochim, params$db_train, multithread = params$cpus, tryRC = TRUE)
+```
+
+
+```{r taxaPrint}
+taxa.print <- taxa  # Removing sequence rownames for display only
+rownames(taxa.print) <- NULL
+head(taxa.print)
+```
+
+## Export stuff
+
+```{r export}
+#modified from Astrobiomike's tutorial
+# giving our seq headers more manageable names (ASV_1, ASV_2...)
+
+master_table <- t(seqtab.nochim.collapse) %>% 
+  as.data.frame() %>% 
+  rownames_to_column(var = "asv_seqs") %>% 
+  left_join(rownames_to_column(as.data.frame(taxa), var = "asv_seqs"), by = "asv_seqs") %>% 
+  dplyr::rename(Domain = Kingdom) %>% 
+  dplyr::relocate( c("Domain", "Phylum", "Class", "Order", "Family", "Genus"), .before = "asv_seqs") %>% 
+  relocate("asv_seqs", .after = last_col()) %>% 
+  rownames_to_column(var = "num") %>% 
+  mutate(ASV = paste0(paste("ASV", num, sep="_"))) %>% 
+  select(-num)
+#asv_seqs <- rownames(master_table)
+#asv_codes <- vector(dim(master_table)[1], mode="character")
+
+
+# making and writing out a fasta of our final ASV seqs:
+asv_fasta <- master_table %>%
+  select(ASV, asv_seqs) %>% 
+  dplyr::rename(`seq.name` = ASV,
+                `seq.text` = asv_seqs)
+phylotools::dat2fasta(asv_fasta, "ASVs.fa")
+
+# tax table:
+# creating table of taxonomy and setting any that are unclassified as "NA"
+ranks <- c("Domain", "Phylum", "Class", "Order", "Family", "Genus")
+asv_tax <- master_table %>%
+  select(ASV, Domain:Genus)
+#row.names(asv_tax) <- sub(">", "", asv_codes)
+#colnames(asv_tax) <- ranks
+#rownames(asv_tax) <- gsub(pattern = ">", replacement = "", x = asv_codes)
+
+# count table:
+asv_tab <- master_table %>% 
+  dplyr::select(!c(Domain:Genus, asv_seqs)) %>% 
+  dplyr::select(ASV, everything())
+#asv_tab <- sapply(as.data.frame(master_table[,(length(ranks)+1):dim(master_table)[2]]), as.numeric)
+#row.names(asv_tab) <- sub(">", "", asv_codes)
+write.table(asv_tab, "ASVs_counts.tsv", sep = "\t", quote = FALSE, row.names = F)
+
+asv_tax_fix <-
+  asv_tax %>%
+  dplyr::mutate(Genus = ifelse(!is.na(Genus), Genus,
+                               ifelse(!is.na(Family), paste("unclassified", Family, sep = "_"),
+                                      ifelse(!is.na(Order), paste("unclassified", Order, sep = "_"),
+                                             ifelse(!is.na(Class), paste("unclassified", Class, sep = "_"),
+                                                    ifelse(!is.na(Phylum), paste("unclassified", Phylum, sep = "_"),
+                                                           paste("unclassified", Domain, sep = "_")))))),
+                Family = ifelse(!is.na(Family), Family,
+                                ifelse(!is.na(Order), paste("unclassified", Order, sep = "_"),
+                                       ifelse(!is.na(Class), paste("unclassified", Class, sep = "_"),
+                                              ifelse(!is.na(Phylum), paste("unclassified", Phylum, sep = "_"),
+                                                     paste("unclassified", Domain, sep = "_"))))),
+                Order = ifelse(!is.na(Order), Order,
+                               ifelse(!is.na(Class), paste("unclassified", Class, sep = "_"),
+                                      ifelse(!is.na(Phylum), paste("unclassified", Phylum, sep = "_"),
+                                             paste("unclassified", Domain, sep = "_")))),
+                Class = ifelse(!is.na(Class), Class,
+                                      ifelse(!is.na(Phylum), paste("unclassified", Phylum, sep = "_"),
+                                             paste("unclassified", Domain, sep = "_"))),
+                Phylum = ifelse(!is.na(Phylum), Phylum,
+                                paste("unclassified", Domain, sep = "_")))
+
+write.table(asv_tax_fix, "ASVs_taxonomy.tsv", sep = "\t", quote=F, row.names = F)
+```
+
+
+```{r tax_x_counts}
+asv_tax_counts <- full_join(asv_tax_fix, asv_tab, by = "ASV")
+
+write.table(asv_tax_counts, "ASVs_taxonomy_x_counts.tsv", sep = "\t", quote=F, row.names = F)
+```
+
+
+```{r phyloseq_relab}
+require(phyloseq)
+
+physeq <- phyloseq(otu_table(t(asv_tab %>% column_to_rownames(var = "ASV")), taxa_are_rows = F),
+                   tax_table(as.matrix(asv_tax_fix %>% column_to_rownames(var = "ASV"))))
+
+physeq.ra <- transform_sample_counts(physeq, function(x) x / sum(x) )
+
+
+asv_tax_relab <- cbind(asv_tax_fix, t(otu_table(physeq.ra)))
+
+write.table(asv_tax_relab, "ASVs_taxonomy_x_relab.tsv", sep = "\t", quote=F, row.names = F)
+```
+
+```{r finalRData}
+save.image("final.RData")
+```
+
