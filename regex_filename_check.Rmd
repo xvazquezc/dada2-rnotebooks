@@ -1,0 +1,28 @@
+---
+title: "RegEx filename check"
+output: html_notebook
+params:
+  fwd_pat: "_L001_R1_001.fastq.gz" #pattern to identify the forward reads
+  raw_data: "raw"
+  fname_regex: "-MEL17453A[:digit:]{1,}-AAHLCF3M5_S[:digit:]{1,}_L001_R1_001\\.fastq\\.gz"
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook to evaluate the RegEx pattern to be used to extract the sample names from the FastQ file names. RegEx patterns can be quite complex so this provides a space to check its validity before running the DADA2 notebooks.
+
+Note that the samples names are only extracted from the forward reads.
+
+
+```{r}
+library(stringr)
+path <- params$raw_data
+fnFs <- sort(list.files(path, pattern = params$fwd_pat, full.names = TRUE, all.files = T))
+
+get.sample.name <- function(fname) {
+  stringr::str_remove(basename(fname), params$fname_regex)
+}
+
+sample.names <- get.sample.name(fnFs)
+
+data.frame(file_name = basename(fnFs),
+           sample_name = sample.names)
+```
