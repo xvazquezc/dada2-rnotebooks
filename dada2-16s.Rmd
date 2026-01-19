@@ -7,6 +7,7 @@ params:
   rev_seq: "ACGGGCGGTGWGTRC"
   fwd_pat: "_L001_R1_001.fastq.gz"
   rev_pat: "_L001_R2_001.fastq.gz"
+  fname_regex: "-MEL17453A[:digit:]{1,}-AAHLCF3M5_S[:digit:]{1,}_L001_R1_001\\.fastq\\.gz"
   read_len: 300 #DO NOT QUOTE
   cpus: 8 #DO NOT QUOTE
   cutadapt_path: "/apps/z_install_tree/linux-rocky8-ivybridge/gcc-12.2.0/cutadapt-4.3-h7up35wj3xjo6pfjkkevxbkqd764obtw/bin/cutadapt"
@@ -59,7 +60,6 @@ if (length(qual_list) < 5) {
 } else {
   phred_scores = "standard continuous"
 }
-
 ```
 
 The Phred scores in the FastQ files are: `r qual_list`. Most likely the data contains `r phred_scores` Phred scores.
@@ -160,7 +160,7 @@ cutRs <- sort(list.files(path.cut, pattern = params$rev_pat, full.names = TRUE))
 
 # Extract sample names, assuming filenames have format:
 get.sample.name <- function(fname) {
-  stringr::str_remove(basename(fname), "-MEL17453A[:digit:]{1,}-AAHLCF3M5_S[:digit:]{1,}_L001_R1_001\\.fastq\\.gz")
+  stringr::str_remove(basename(fname), params$fname_regex)
 }
 sample.names <- get.sample.name( cutFs )
 head(sample.names)
