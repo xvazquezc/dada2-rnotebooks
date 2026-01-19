@@ -13,7 +13,7 @@ params:
   cutadapt_path: "/apps/z_install_tree/linux-rocky8-ivybridge/gcc-12.2.0/cutadapt-4.3-h7up35wj3xjo6pfjkkevxbkqd764obtw/bin/cutadapt"
   cdhit_path: "/apps/z_install_tree/linux-rocky8-ivybridge/gcc-12.2.0/cdhit-4.8.1-d3fwnap7tmcfkp2h46bxgntfddriozt5/bin" #to the binaries folder not the executable
   db_train: "/srv/scratch/ferrari/utils/silva_nr99_v138.1_train_set.fa.gz"
-  db_assign: "/home/xabi/Desktop/burnslab/first_amplicon/silva_species_assignment_v138.1.fa.gz"
+  db_assign: ""
 ---
 
 # Setup 
@@ -49,6 +49,9 @@ list.files(path, recursive = F)
 ```
 
 ## Check Phred scores
+
+New Illumina data uses binned Phred scores, not a standard continuous scale of values. This affects to the error rate estimation during DADA2's downstream analysis. This chunk detects the type of scores in the dataset.
+
 ```{r phred}
 fq_qa <- qa(path, type = "fastq")
 myscores <- fq_qa@.srlist$baseQuality %>% filter(count > 0) %>% distinct(score) %>% pull(score)
@@ -67,7 +70,7 @@ The Phred scores in the FastQ files are: `r qual_list`. Most likely the data con
 # Processing
 
 ## Identify primers
-```{r}
+```{r listFastq}
 fnFs <- sort(list.files(path, pattern = params$fwd_pat, full.names = TRUE))
 fnRs <- sort(list.files(path, pattern = params$rev_pat, full.names = TRUE))
 ```
@@ -163,7 +166,7 @@ get.sample.name <- function(fname) {
   stringr::str_remove(basename(fname), params$fname_regex)
 }
 sample.names <- get.sample.name( cutFs )
-head(sample.names)
+
 sample.names
 ```
 
@@ -276,7 +279,7 @@ sum(seqtab.nochim)/sum(seqtab)
 table(nchar(getSequences(seqtab.nochim)))
 ```
 
-```{r}
+```{r writeSeqtabnochim}
 write.csv(seqtab.nochim, "seqtab.nochim.csv")
 ```
 
