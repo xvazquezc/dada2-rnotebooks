@@ -81,14 +81,14 @@ REV <- params$rev_seq  ## CHANGE ME...
 
 ```{r orient}
 allOrients <- function(primer) {
-    # Create all orientations of the input sequence
-    require(Biostrings)
-    dna <- DNAString(primer)  # The Biostrings works w/ DNAString objects rather than character vectors
-    orients <- c(Forward = dna,
-                 Complement = Biostrings::complement(dna),
-                 Reverse = Biostrings::reverse(dna), 
-                 RevComp = Biostrings::reverseComplement(dna))
-    return(sapply(orients, toString))  # Convert back to character vector
+  # Create all orientations of the input sequence
+  require(Biostrings)
+  dna <- DNAString(primer)  # The Biostrings works w/ DNAString objects rather than character vectors
+  orients <- c(Forward = dna,
+               Complement = Biostrings::complement(dna),
+               Reverse = Biostrings::reverse(dna), 
+               RevComp = Biostrings::reverseComplement(dna))
+  return(sapply(orients, toString))  # Convert back to character vector
 }
 FWD.orients <- allOrients(FWD)
 REV.orients <- allOrients(REV)
@@ -105,14 +105,14 @@ filterAndTrim(fnFs, fnFs.filtN, fnRs, fnRs.filtN, maxN = 0, multithread = params
 
 ```{r primerHits}
 primerHits <- function(primer, fn) {
-    # Counts number of reads in which the primer is found
-    nhits <- vcountPattern(primer, sread(readFastq(fn)), fixed = FALSE)
-    return(sum(nhits > 0))
+  # Counts number of reads in which the primer is found
+  nhits <- vcountPattern(primer, sread(readFastq(fn)), fixed = FALSE)
+  return(sum(nhits > 0))
 }
 rbind(FWD.ForwardReads = sapply(FWD.orients, primerHits, fn = fnFs.filtN[[1]]), 
-    FWD.ReverseReads = sapply(FWD.orients, primerHits, fn = fnRs.filtN[[1]]), 
-    REV.ForwardReads = sapply(REV.orients, primerHits, fn = fnFs.filtN[[1]]), 
-    REV.ReverseReads = sapply(REV.orients, primerHits, fn = fnRs.filtN[[1]]))
+      FWD.ReverseReads = sapply(FWD.orients, primerHits, fn = fnRs.filtN[[1]]), 
+      REV.ForwardReads = sapply(REV.orients, primerHits, fn = fnFs.filtN[[1]]), 
+      REV.ReverseReads = sapply(REV.orients, primerHits, fn = fnRs.filtN[[1]]))
 ```
 
 ## Remove Primers
@@ -148,9 +148,9 @@ for(i in seq_along(fnFs)) {
 
 ```{r primerhitsbind}
 rbind(FWD.ForwardReads = sapply(FWD.orients, primerHits, fn = fnFs.cut[[1]]), 
-    FWD.ReverseReads = sapply(FWD.orients, primerHits, fn = fnRs.cut[[1]]), 
-    REV.ForwardReads = sapply(REV.orients, primerHits, fn = fnFs.cut[[1]]), 
-    REV.ReverseReads = sapply(REV.orients, primerHits, fn = fnRs.cut[[1]]))
+      FWD.ReverseReads = sapply(FWD.orients, primerHits, fn = fnRs.cut[[1]]), 
+      REV.ForwardReads = sapply(REV.orients, primerHits, fn = fnFs.cut[[1]]), 
+      REV.ReverseReads = sapply(REV.orients, primerHits, fn = fnRs.cut[[1]]))
 ```
 
 ```{r sample_names}
@@ -171,13 +171,13 @@ sample.names
 ## Inspect read quality profiles
 ```{r qcFwd}
 plotQualityProfile(cutFs[1:2]) + 
-    ggplot2::scale_x_continuous(breaks = seq(0, params$read_len, 25))
+  ggplot2::scale_x_continuous(breaks = seq(0, params$read_len, 25))
 ```
 
 
 ```{r qcRev}
 plotQualityProfile(cutRs[1:2]) + 
-    ggplot2::scale_x_continuous(breaks = seq(0, params$read_len, 25))
+  ggplot2::scale_x_continuous(breaks = seq(0, params$read_len, 25))
 ```
 
 
@@ -188,8 +188,10 @@ filtRs <- file.path(path.cut, "filtered", basename(cutRs))
 ```
 
 ```{r filterAndTrim_quality}
-out <- filterAndTrim(cutFs, filtFs, cutRs, filtRs, maxN = 0, maxEE = c(3, 5),  truncLen = c(275,230),
-    truncQ = 2, minLen = 150, rm.phix = TRUE, compress = TRUE, multithread = params$cpus)  # on windows, set multithread = FALSE
+out <- filterAndTrim(cutFs, filtFs, cutRs, filtRs, 
+                     maxN = 0, maxEE = c(3, 5),
+                     truncLen = c(275,230), truncQ = 2, minLen = 150,
+                     rm.phix = TRUE, compress = TRUE, multithread = params$cpus)  # on windows, set multithread = FALSE
 
 out
 ```
@@ -296,12 +298,12 @@ system2(cdhitest, args = "--version") # Run shell commands from R
 
 ```{r cd-hit-est}
 system2(cdhitest, args = c("-i", "seqtab.nochim.fasta",
-                        "-o", "seqtab.nochim.collapse.fasta",
-                        "-T", params$cpus,
-                        "-M", "0",
-                        "-c", "1",
-                        "-d", "0",
-                        "-g", "1"))
+                           "-o", "seqtab.nochim.collapse.fasta",
+                           "-T", params$cpus,
+                           "-M", "0",
+                           "-c", "1",
+                           "-d", "0",
+                           "-g", "1"))
 ```
 
 
@@ -314,7 +316,7 @@ system2(clstr2txt,
 
 ```{r load_clstr}
 collapse_clstr <- read.table("seqtab.nochim.collapse.fasta.tsv",
-           sep = "\t", header = T) %>% 
+                             sep = "\t", header = T) %>% 
   select(id, clstr, clstr_rep)
 
 clstr_reps <- collapse_clstr %>% 
@@ -357,10 +359,10 @@ rownames(out2) <- unname(sapply(rownames(out2), get.sample.name))
 
 track <- tibble::as_tibble(out2, rownames = "Sample") %>% 
   full_join(tibble::as_tibble(sapply(dadaFs, getN), rownames = "Sample"), by = "Sample") %>% 
-               full_join(tibble::as_tibble(sapply(dadaRs, getN), rownames = "Sample"), by = "Sample") %>% 
-               full_join(tibble::as_tibble(sapply(mergers, getN), rownames = "Sample"), by = "Sample") %>% 
-               full_join(tibble::as_tibble(rowSums(seqtab.nochim), rownames = "Sample"), by = "Sample") %>% 
-               full_join(tibble::as_tibble(rowSums(seqtab.nochim.collapse), rownames = "Sample"), by = "Sample")
+  full_join(tibble::as_tibble(sapply(dadaRs, getN), rownames = "Sample"), by = "Sample") %>% 
+  full_join(tibble::as_tibble(sapply(mergers, getN), rownames = "Sample"), by = "Sample") %>% 
+  full_join(tibble::as_tibble(rowSums(seqtab.nochim), rownames = "Sample"), by = "Sample") %>% 
+  full_join(tibble::as_tibble(rowSums(seqtab.nochim.collapse), rownames = "Sample"), by = "Sample")
 # If processing a single sample, remove the sapply calls: e.g. replace
 # sapply(dadaFs, getN) with getN(dadaFs)
 colnames(track) <- c("Sample", "input", "filtered", "denoisedF", "denoisedR", "merged", "nonchim", "collapsed")
@@ -449,8 +451,8 @@ asv_tax_fix <-
                                       ifelse(!is.na(Phylum), paste("unclassified", Phylum, sep = "_"),
                                              paste("unclassified", Domain, sep = "_")))),
                 Class = ifelse(!is.na(Class), Class,
-                                      ifelse(!is.na(Phylum), paste("unclassified", Phylum, sep = "_"),
-                                             paste("unclassified", Domain, sep = "_"))),
+                               ifelse(!is.na(Phylum), paste("unclassified", Phylum, sep = "_"),
+                                      paste("unclassified", Domain, sep = "_"))),
                 Phylum = ifelse(!is.na(Phylum), Phylum,
                                 paste("unclassified", Domain, sep = "_")))
 
