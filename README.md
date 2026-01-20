@@ -46,4 +46,7 @@ Most of the important configurable parameters to run the notebooks are in the YA
 
 Some of the most critical parameters when running DADA2 are those associated with the `filterAndTrim()` function. This function is in the `filterAndTrim_quality` code chunk. Here, I indicate some parameters that have worked well in the past:
 
-- 926F (5\'-AAACTYAAAKGAATTGRCGG-3\') and 1392wR (5\'-ACGGGCGGTGWGTRC-3\'): requires 2x300 run. Params: `maxEE = c(3, 5), truncLen = c(275,230), truncQ = 2, minLen = 150`
+- **515-Y** (5\'-GTGYCAGCMGCCGCGGTAA-3\') and **806RB** (5\'-GGACTACNVGGGTWTCTAAT-3\'): usual 16S v4 primers. 2x250. Params: `maxEE = c(3, 5), truncLen = c(225,200), truncQ = 2, minLen = 150`.
+- **926F** (5\'-AAACTYAAAKGAATTGRCGG-3\') and **1392wR** (5\'-ACGGGCGGTGWGTRC-3\'): Universal 16S/18S - v6-v8 (based on 16S). It requires 2x300 run. Params: `maxEE = c(3, 5), truncLen = c(275,230), truncQ = 2, minLen = 150`.
+- **fITS7** (5\'-GTGAATCATCGAATCTTTG-3\') and **ITS4** (5\'-TCCTCCGCTTATTGATATGC-3\'): Fungal ITS2. 2x250 run. Params: `maxEE = c(1, 3), truncQ = 2, minLen = 50` (don't use `truncLen` to avoid discarding reads from short ITS2 regions).
+- **ITS1 region** or **full-length ITS**: actual amplicons might be way too long for some to be merged after quality trimming and primer removal, albeit they are _bona fide_ sequences. If you don't want to possibly lose that part of the community, you can either use the `justConcatenate = TRUE` option in `mergePairs()` or just use the forward reads. If you only keep the forward reads (you need to change the code) these are some suitable params: `maxEE = 2, trimLeft = 25, truncQ = 5, minLen = 50`.
