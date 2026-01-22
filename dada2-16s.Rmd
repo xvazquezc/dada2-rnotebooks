@@ -382,7 +382,7 @@ as.data.frame(track) %>%
 
 ## Assign taxonomy
 ```{r assignTaxonomy}
-taxa <- assignTaxonomy(seqtab.nochim, params$db_train, multithread = params$cpus, tryRC = TRUE)
+taxa <- assignTaxonomy(seqtab.nochim.collapse, params$db_train, multithread = params$cpus, tryRC = TRUE)
 ```
 
 
