@@ -20,26 +20,27 @@ params:
 
 ## Load libraries
 ```{r libraries}
-library(magrittr)
-packageVersion("magrittr")
-library(dada2)
-packageVersion("dada2")
-library(ShortRead)
-packageVersion("ShortRead")
-library(Biostrings)
-packageVersion("Biostrings")
-library(tibble)
-packageVersion("tibble")
-library(dplyr)
-packageVersion("dplyr")
-library(tidyr)
-packageVersion("tidyr")
-library(stringr)
-packageVersion("stringr")
-library(phylotools)
-packageVersion("phylotools")
-library(phyloseq)
-packageVersion("phyloseq")
+library(pacman)
+
+library_list <- list(
+  "magrittr",
+  "dada2",
+  "ShortRead",
+  "Biostrings",
+  "tibble",
+  "dplyr",
+  "tidyr",
+  "stringr",
+  "phylotools",
+  "phyloseq",
+  "pacman"
+)
+
+p_load(char = library_list, install = FALSE, character.only = TRUE)
+
+pkg_info <- lapply(library_list, packageDescription, fields = c("Package", "Version"))
+
+do.call(rbind, pkg_info)
 ```
 
 
