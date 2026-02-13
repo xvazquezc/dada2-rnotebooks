@@ -33,11 +33,12 @@ Most of the important configurable parameters to run the notebooks are in the YA
 - `raw_data:` project subfolder with the raw reads (default: `"raw"`).
 - `fwd_seq:` forward primer sequence (e.g., `"AAACTYAAAKGAATTGRCGG"`).
 - `rev_seq:` forward primer sequence (e.g., `"ACGGGCGGTGWGTRC"`).
-- `fwd_pat:` forward file pattern, filename pattern to differentiated the forward reads from the reverse files (default: `"_L001_R1_001.fastq.gz"`).
-- `rev_pat:` reverse file pattern, filename pattern to differentiated the reverse reads from the forward files (default: `"_L001_R2_001.fastq.gz"`).
+- `fwd_pat:` forward file pattern, filename pattern to differentiated the forward reads from the reverse files (default: `"R1(_001){0,1}.fastq.gz"`). The default should match standard filenames from Illumina sequencing (e.g. `[sample]_L001_R1_001.fastq.gz`) as well as simplified names (e.g. `[sample]_R1.fastq.gz`).
+- `rev_pat:` reverse file pattern, filename pattern to differentiated the reverse reads from the forward files (default: `"R2(_001){0,1}.fastq.gz"`). The default should match standard filenames from Illumina sequencing (e.g. `[sample]_L001_R2_001.fastq.gz`) as well as simplified names (e.g. `[sample]_R2.fastq.gz`).
 - `fname_regex:` forward file name [regular expression (RegEx)](https://en.wikipedia.org/wiki/Regular_expression). RegEx for parsing the "Sample name" from the forward file name. Because the name extraction happens in the middle of the run and can be a bit tricky to get right, [I include an accessory Rmd to test with your files](regex_filename_check.Rmd) (e.g., `"-MEL17453A[:digit:]{1,}-AAHLCF3M5_S[:digit:]{1,}_L001_R1_001\\.fastq\\.gz"`).
   >Note: it's not a compulsory parameter and you can just indicate something like `"\\.fastq\\.gz"` to simply remove the file extension.
 - `read_len:` raw amplicon read length, __do not quote the value__ (default: `300`).
+- `isits`: if you are processing ITS sequences, switch the value to `TRUE`. This will simply adjust the headers of the taxonomy table to values more appropriate to that taxonomy, __do not quote the value__  (default: `FALSE`).
 - `cpus:` number of CPUs to use in the tasks that allow multithreading, __do not quote the value__ (default: `8`).
 - `cutadapt_path:` path to Cutadapt's executable (e.g., `"/apps/z_install_tree/linux-rocky8-ivybridge/gcc-12.2.0/cutadapt-4.3-h7up35wj3xjo6pfjkkevxbkqd764obtw/bin/cutadapt"`).
 - `cdhit_path:` path to the folder *containing* CD-HIT's binaries and accessory tools, __not the executable__ (e.g., `"/apps/z_install_tree/linux-rocky8-ivybridge/gcc-12.2.0/cdhit-4.8.1-d3fwnap7tmcfkp2h46bxgntfddriozt5/bin"`).

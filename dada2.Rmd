@@ -9,6 +9,7 @@ params:
   rev_pat: "R2(_001){0,1}.fastq.gz"
   fname_regex: "-MEL17453A[:digit:]{1,}-AAHLCF3M5_S[:digit:]{1,}_L001_R1_001\\.fastq\\.gz"
   read_len: 300 #DO NOT QUOTE
+  isits: FALSE
   cpus: 8 #DO NOT QUOTE
   cutadapt_path: "/apps/z_install_tree/linux-rocky8-ivybridge/gcc-12.2.0/cutadapt-4.3-h7up35wj3xjo6pfjkkevxbkqd764obtw/bin/cutadapt"
   cdhit_path: "/apps/z_install_tree/linux-rocky8-ivybridge/gcc-12.2.0/cdhit-4.8.1-d3fwnap7tmcfkp2h46bxgntfddriozt5/bin" #to the binaries folder not the executable
@@ -395,7 +396,7 @@ head(taxa.print)
 
 ## Export stuff
 
-```{r export}
+```{r export_fasta}
 #modified from Astrobiomike's tutorial
 # giving our seq headers more manageable names (ASV_1, ASV_2...)
 
@@ -419,7 +420,10 @@ asv_fasta <- master_table %>%
   dplyr::rename(`seq.name` = ASV,
                 `seq.text` = asv_seqs)
 phylotools::dat2fasta(asv_fasta, "ASVs.fa")
+```
 
+
+```{r export_counts}
 # tax table:
 # creating table of taxonomy and setting any that are unclassified as "NA"
 ranks <- c("Domain", "Phylum", "Class", "Order", "Family", "Genus")
@@ -436,31 +440,62 @@ asv_tab <- master_table %>%
 #asv_tab <- sapply(as.data.frame(master_table[,(length(ranks)+1):dim(master_table)[2]]), as.numeric)
 #row.names(asv_tab) <- sub(">", "", asv_codes)
 write.table(asv_tab, "ASVs_counts.tsv", sep = "\t", quote = FALSE, row.names = F)
+```
 
-asv_tax_fix <-
-  asv_tax %>%
-  dplyr::mutate(Genus = ifelse(!is.na(Genus), Genus,
-                               ifelse(!is.na(Family), paste("unclassified", Family, sep = "_"),
-                                      ifelse(!is.na(Order), paste("unclassified", Order, sep = "_"),
-                                             ifelse(!is.na(Class), paste("unclassified", Class, sep = "_"),
-                                                    ifelse(!is.na(Phylum), paste("unclassified", Phylum, sep = "_"),
-                                                           paste("unclassified", Domain, sep = "_")))))),
-                Family = ifelse(!is.na(Family), Family,
-                                ifelse(!is.na(Order), paste("unclassified", Order, sep = "_"),
-                                       ifelse(!is.na(Class), paste("unclassified", Class, sep = "_"),
-                                              ifelse(!is.na(Phylum), paste("unclassified", Phylum, sep = "_"),
-                                                     paste("unclassified", Domain, sep = "_"))))),
-                Order = ifelse(!is.na(Order), Order,
-                               ifelse(!is.na(Class), paste("unclassified", Class, sep = "_"),
-                                      ifelse(!is.na(Phylum), paste("unclassified", Phylum, sep = "_"),
-                                             paste("unclassified", Domain, sep = "_")))),
-                Class = ifelse(!is.na(Class), Class,
-                               ifelse(!is.na(Phylum), paste("unclassified", Phylum, sep = "_"),
-                                      paste("unclassified", Domain, sep = "_"))),
-                Phylum = ifelse(!is.na(Phylum), Phylum,
-                                paste("unclassified", Domain, sep = "_")))
 
-write.table(asv_tax_fix, "ASVs_taxonomy.tsv", sep = "\t", quote=F, row.names = F)
+```{r export_tax}
+if(params$isits != TRUE) {
+  asv_tax_fix <-
+    asv_tax %>%
+    dplyr::mutate(Genus = ifelse(!is.na(Genus), Genus,
+                                 ifelse(!is.na(Family), paste("unclassified", Family, sep = "_"),
+                                        ifelse(!is.na(Order), paste("unclassified", Order, sep = "_"),
+                                               ifelse(!is.na(Class), paste("unclassified", Class, sep = "_"),
+                                                      ifelse(!is.na(Phylum), paste("unclassified", Phylum, sep = "_"),
+                                                             paste("unclassified", Domain, sep = "_")))))),
+                  Family = ifelse(!is.na(Family), Family,
+                                  ifelse(!is.na(Order), paste("unclassified", Order, sep = "_"),
+                                         ifelse(!is.na(Class), paste("unclassified", Class, sep = "_"),
+                                                ifelse(!is.na(Phylum), paste("unclassified", Phylum, sep = "_"),
+                                                       paste("unclassified", Domain, sep = "_"))))),
+                  Order = ifelse(!is.na(Order), Order,
+                                 ifelse(!is.na(Class), paste("unclassified", Class, sep = "_"),
+                                        ifelse(!is.na(Phylum), paste("unclassified", Phylum, sep = "_"),
+                                               paste("unclassified", Domain, sep = "_")))),
+                  Class = ifelse(!is.na(Class), Class,
+                                 ifelse(!is.na(Phylum), paste("unclassified", Phylum, sep = "_"),
+                                        paste("unclassified", Domain, sep = "_"))),
+                  Phylum = ifelse(!is.na(Phylum), Phylum,
+                                  paste("unclassified", Domain, sep = "_")))
+  
+  write.table(asv_tax_fix, "ASVs_taxonomy.tsv", sep = "\t", quote=F, row.names = F)
+} else if(params$isits == TRUE) {
+  asv_tax_fix <-
+    as.data.frame(asv_tax) %>%
+    dplyr::mutate(
+      Genus = ifelse(!is.na(Genus), Genus,
+                     ifelse(!is.na(Family), paste("unclassified", Family, sep = "_"),
+                            ifelse(!is.na(Order), paste("unclassified", Order, sep = "_"),
+                                   ifelse(!is.na(Class), paste("unclassified", Class, sep = "_"),
+                                          ifelse(!is.na(Phylum), paste("unclassified", Phylum, sep = "_"),
+                                                 paste("unclassified", Kingdom, sep = "_")))))),
+      Family = ifelse(!is.na(Family), Family,
+                      ifelse(!is.na(Order), paste("unclassified", Order, sep = "_"),
+                             ifelse(!is.na(Class), paste("unclassified", Class, sep = "_"),
+                                    ifelse(!is.na(Phylum), paste("unclassified", Phylum, sep = "_"),
+                                           paste("unclassified", Kingdom, sep = "_"))))),
+      Order = ifelse(!is.na(Order), Order,
+                     ifelse(!is.na(Class), paste("unclassified", Class, sep = "_"),
+                            ifelse(!is.na(Phylum), paste("unclassified", Phylum, sep = "_"),
+                                   paste("unclassified", Kingdom, sep = "_")))),
+      Class = ifelse(!is.na(Class), Class,
+                     ifelse(!is.na(Phylum), paste("unclassified", Phylum, sep = "_"),
+                            paste("unclassified", Kingdom, sep = "_"))),
+      Phylum = ifelse(!is.na(Phylum), Phylum,
+                      paste("unclassified", Kingdom, sep = "_")))
+  
+  write.table(asv_tax_fix, "ASVs_taxonomy.tsv", sep = "\t", quote=F, col.names=NA)
+}
 ```
 
 
