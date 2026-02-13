@@ -6,6 +6,7 @@ This repository contains R notebooks for processing amplicon data via [DADA2](ht
 
 ## Requirements
 
+### Software
 The notebooks have only been tested in R under Linux (Ubuntu and Rocky Linux) with RStudio.
 
 - R
@@ -22,6 +23,12 @@ The notebooks have only been tested in R under Linux (Ubuntu and Rocky Linux) wi
 - [Cutadapt](https://github.com/marcelm/cutadapt/)
 - [CD-HIT](https://github.com/weizhongli/cdhit)
 
+### Databases
+
+- 16S rRNA gene: [SILVA formatted for DADA2](https://benjjneb.github.io/dada2/training.html).
+- 18S rRNA gene: [PR2 database](https://github.com/pr2database/pr2database/releases).
+- ITS: UNITE releases 4 different resources with each version. I recommend to use the "All eukaryotes" that "Includes singletons set as RefS (in dynamic files)". [Download it from the UNITE resources page under "General FASTA release"](https://unite.ut.ee/repository.php).
+  > **IMPORTANT:** Fungal ITS primers often amplify organisms other than Fungi. If you use the "Fungi" version, any non-fungal sequence will be misclassified as "Fungi; unknown phylum" even when they are not fungal, e.g. plant sequences. You definitely don't want that!
 
 
 ## Running
