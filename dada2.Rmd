@@ -5,8 +5,8 @@ params:
   raw_data: "raw"
   fwd_seq: "AAACTYAAAKGAATTGRCGG"
   rev_seq: "ACGGGCGGTGWGTRC"
-  fwd_pat: "_L001_R1_001.fastq.gz"
-  rev_pat: "_L001_R2_001.fastq.gz"
+  fwd_pat: "R1(_001){0,1}.fastq.gz"
+  rev_pat: "R2(_001){0,1}.fastq.gz"
   fname_regex: "-MEL17453A[:digit:]{1,}-AAHLCF3M5_S[:digit:]{1,}_L001_R1_001\\.fastq\\.gz"
   read_len: 300 #DO NOT QUOTE
   cpus: 8 #DO NOT QUOTE
