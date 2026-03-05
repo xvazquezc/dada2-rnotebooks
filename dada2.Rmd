@@ -520,6 +520,11 @@ asv_tax_relab <- cbind(asv_tax_fix, t(otu_table(physeq.ra)))
 write.table(asv_tax_relab, "ASVs_taxonomy_x_relab.tsv", sep = "\t", quote=F, row.names = F)
 ```
 
+
+```{r phyloseq_export}
+saveRDS(physeq, "physeq.RDS")
+```
+
 ```{r finalRData}
 save.image("final.RData")
 ```
