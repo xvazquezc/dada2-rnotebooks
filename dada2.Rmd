@@ -529,3 +529,6 @@ saveRDS(physeq, "physeq.RDS")
 save.image("final.RData")
 ```
 
+```{r sessionInfo}
+sessionInfo()
+```
