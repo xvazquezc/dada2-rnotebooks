@@ -1,5 +1,5 @@
 ---
-title: "Project ID: <insert Project ID>"
+title: "Project ID: `r basename(getwd())`"
 output: html_notebook
 params:
   raw_data: "raw"
