@@ -1,0 +1,657 @@
+---
+title: "`r basename(getwd())`"
+date: "`r format(Sys.time(), '%d %B %Y')`"
+output:
+  html_document:
+    toc: true
+    toc_float:
+      collapsed: false
+      smooth_scroll: true
+    toc_depth: 4
+    df_print: kable
+    theme: default
+urlcolor: "blue"
+#mainfont: "fonts/Open"
+documentclass: "report"
+classoption: a4paper
+geometry: headheight=1.5cm, footskip=\dimexpr\headsep+\ht\strutbox\relax, bmargin = \dimexpr25mm+2\ht\strutbox\relax
+fontsize: 12pt
+params:
+  krona_path: "/home/xabi/miniconda3/envs/otureporter/bin" #path to the krona executables
+  treefile: "/home/xabi/Desktop/other/micro-course2026/ASVs.mafft.fasttree_lg-gamma.tree" #full path to tree file
+---
+
+
+```{r setup, include=FALSE}
+# Loading and/or installing packages
+#
+# Code from http://www.vikparuchuri.com/blog/loading-andor-installing-packages/
+# Check whether a package of interest is installed
+is_installed = function(mypkg) is.element(mypkg, installed.packages()[,1])  
+# Install it if it isn't already installed
+# Run a for-loop of all the package names listed below in the function call
+# with the list of packages: load_or_install(c("pkg1", "pkg2",..., "pkgn"))
+load_or_install = function(package_names)  
+{  
+  for(package_name in package_names)  
+  {  
+    if(!is_installed(package_name))  
+    {  
+      # Install tidyverse and kableExtra R packages from CRAN
+      install.packages(package_name,repos="http://lib.stat.cmu.edu/R/CRAN")
+    }  
+    library(package_name,character.only=TRUE,quietly=TRUE,verbose=FALSE)  
+  }  
+}  
+# library(tools) has the file_path_sans_ext(filename) function
+
+load_or_install(c("pacman", "BiocManager"))
+
+knitr::opts_chunk$set(echo = TRUE, out.width = "100%")
+```
+
+
+
+```{r include=FALSE, echo = FALSE}
+library(pacman)
+
+library_list <- list(
+  "knitr",
+  "kableExtra",
+  "magrittr",
+  "dplyr",
+  "tidyr",
+  "phyloseq",
+  "microbiome",
+  "ggplot2",
+  "rmarkdown",
+  "plotly",
+  "tibble",
+  "vegan",
+  "purrr",
+  "pacman"
+)
+
+p_load(char = library_list, install = FALSE, character.only = TRUE)
+
+pkg_info <- lapply(library_list, packageDescription, fields = c("Package", "Version"))
+
+do.call(rbind, pkg_info)
+```
+
+
+```{r include=FALSE, echo = FALSE}
+curr_dir <- getwd()
+physeq <- readRDS(paste0(curr_dir, "/physeq.RDS"))
+num_samples <- ncol(physeq@otu_table)
+
+# if (params$treefile == "") {
+#   tree = FALSE
+# } else {
+#   tree = TRUE
+# }
+```
+
+
+
+```{css echo = FALSE, warnings=FALSE}
+# pre code, pre, code {
+#   white-space: pre !important;
+#   overflow-x: auto !important;
+#   word-break: keep-all !important;
+#   word-wrap: initial !important;
+# }
+body .main-container {
+  max-width: 1200px;
+}
+```
+
+
+
+
+## Rarefaction curve
+
+
+```{r rarefaction, echo = FALSE, warning=FALSE}
+require(ggplot2)
+require(tidyr)
+require(plotly)
+
+otu_matrix <- otu_tibble(physeq) %>% column_to_rownames(var = "FeatureID") %>% as.matrix() %>% t()
+raremax <- min(rowSums(otu_matrix))
+
+rarefaction_curve <- rarecurve(otu_matrix, sample = raremax, 
+                               step = 20, tidy = TRUE)
+
+rarefaction_curve %<>% 
+  rename(ASVs = Species,
+         nseq = Sample,
+         Sample = Site)
+
+#head(rare_subset_long)
+
+rare_plot <- ggplot(rarefaction_curve, aes(nseq, ASVs)) +
+  geom_line(aes(color = Sample), size = 0.25) +
+  theme_light() +
+  labs(x = "Number of sequences", y = paste("Number of ASVs"), color = "Samples")
+
+ggplotly(rare_plot)
+```
+
+
+
+## Community composition
+
+In the following sections, we provide abundance bar plots for phylum to family level for the *good samples*. Detailed composition of the samples can be consulted in the attached interactive Krona plots:
+
+ <!-- for both diversity and richness and both full dataset and subsampled data -->
+```{r krona_generate, echo = FALSE, results='asis'}
+krona_dir <- file.path(getwd(), "krona")
+dir.create(krona_dir, showWarnings = FALSE, recursive = TRUE)
+
+kt_exe <- file.path(params$krona_path, "ktImportText")
+if (!file.exists(kt_exe)) {
+  warning("ktImportText not found at: ", kt_exe, ". Skipping Krona plot generation.")
+  krona_ok <- FALSE
+} else {
+  krona_ok <- TRUE
+}
+
+if (krona_ok) {
+  otu   <- as.data.frame(otu_table(physeq))
+  tax   <- as.data.frame(tax_table(physeq))
+
+  if (!taxa_are_rows(physeq)) {
+    otu <- as.data.frame(t(otu))
+  }
+
+  all_ranks   <- rank_names(physeq)
+  if ("Kingdom" %in% all_ranks) {
+    colnames(tax)[colnames(tax) == "Kingdom"] <- "Domain"
+    all_ranks[all_ranks == "Kingdom"] <- "Domain"
+  }
+  tax[is.na(tax)] <- "Unclassified"
+
+  # Build a single long-format table, then split-apply to write per-sample files
+  long_df <- otu %>%
+    mutate(across(everything(), as.numeric)) %>%
+    mutate(taxon_id = seq_len(n())) %>%
+    pivot_longer(cols = -taxon_id, names_to = "sample", values_to = "count") %>%
+    filter(count > 0) %>%
+    left_join(tax %>% mutate(taxon_id = seq_len(n())) %>%
+                select(taxon_id, all_of(all_ranks)),
+              by = "taxon_id") %>%
+    select(-taxon_id)
+
+  krona_files <- long_df %>%
+    split(.$sample) %>%
+    purrr::map_chr(function(df_sample) {
+      sname    <- df_sample$sample[1]
+      out_file <- file.path(krona_dir, paste0(sname, ".krona.txt"))
+      write.table(df_sample %>% select(count, all_of(all_ranks)),
+                  file = out_file, sep = "\t", quote = FALSE,
+                  row.names = FALSE, col.names = FALSE)
+      out_file
+    })
+
+  if (length(krona_files) > 0) {
+    krona_args <- paste0(krona_files, ",",
+                         tools::file_path_sans_ext(
+                           tools::file_path_sans_ext(basename(krona_files))))
+    html_out <- file.path(krona_dir, "krona_all_samples.html")
+    cmd <- paste(shQuote(kt_exe),
+                 paste(shQuote(krona_args), collapse = " "),
+                 "-o", shQuote(html_out))
+    status <- system(cmd)
+    if (status == 0) {
+      rel_path <- file.path("krona", "krona_all_samples.html")
+      cat(paste0('* <a href="', rel_path, '" target="_blank">',
+                 'Interactive Krona plot (all samples)</a>.\n'))
+    } else {
+      warning("ktImportText exited with status ", status)
+    }
+  }
+}
+```
+
+### Phylum-level composition {.tabset .tabset-fade }
+
+*Minor phyla* group all phyla that did not reach a minimum of 2% of the whole community in any sample.
+
+
+```{r pre-graph, echo = FALSE}
+## if there are more than 21 taxa, plot generation will fail
+require(ggplot2)
+require(tidyr)
+require(dplyr)
+require(phyloseq)
+require(plotly)
+
+tol21rainbow= c("#771155", "#AA4488", "#CC99BB", "#114477", "#4477AA", "#77AADD", "#117777", "#44AAAA", "#77CCCC", "#117744", "#44AA77", "#88CCAA", "#777711", "#AAAA44", "#DDDD77", "#774411", "#AA7744", "#DDAA77", "#771122", "#AA4455", "#DD7788")
+
+#otus <-import_biom(BIOMfilename = "postprocessing/mothur.biom")
+num_samples <- nrow(otu_table(physeq))
+plot_size <- max(5, num_samples * 0.2)
+
+#colnames(tax_table(physeq)) <- c("Domain", "Phylum", "Class", "Order", "Family", "Genus", "Species")[0:ncol(tax_table(otus))]
+
+##FUNCTIONS
+
+agg <- function(x, y){
+  x %>%
+    tax_glom(taxrank = quo_name(enquo(y))) %>%           # agglomerate at family level
+    transform_sample_counts(function(x) {x/sum(x)} ) %>% # Transform to rel. abundance
+    psmelt()
+}
+agg_high <- function(x, y){
+  x %>%
+    filter(Abundance >= 0.02) %>%                        # Filter out low abundance taxa
+    arrange(!!enquo(y))                                  # Sort data frame alphabetically by phylum
+}
+
+agg_low <- function(x, y){
+  x %>%
+    filter(Abundance < 0.02) %>%                         # Filter out low abundance taxa
+    arrange(!!enquo(y)) %>%                                  # Sort data frame alphabetically by family
+    group_by(Sample) %>%                                 # Group values by sample
+    summarise(Abundance = sum(Abundance))                # Add values by sample
+}
+```
+
+```{r phylum_graph, echo = FALSE, eval = knitr::opts_knit$get("rmarkdown.pandoc.to") == "html"}
+tmp_otus_phylum <- agg(physeq, Phylum)
+high_otus_phylum <- agg_high(tmp_otus_phylum, Phylum)
+low_otus_phylum <- agg_low(tmp_otus_phylum, Phylum)
+
+low_otus_phylum$Phylum=as.factor("Minor phyla")
+
+high_otus_phylum_select <- high_otus_phylum[, c("Sample", "Abundance", "Phylum")]
+
+otus_phylum <- rbind(high_otus_phylum_select, low_otus_phylum)
+```
+
+#### Static
+
+To save or view full-size, right click on the image to open the menu.
+
+```{r phylum_static, echo = FALSE, fig.width = plot_size}
+phyla <- ggplot(otus_phylum, aes(x=Sample, y= Abundance, fill = Phylum)) +
+  geom_bar(stat = "identity", color="black") +
+  theme_light() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),
+        legend.position = "bottom",
+        legend.key = element_rect(linewidth = 0.05),
+        legend.text = element_text(size = 6)) +
+  labs(x = "Number of sequences", y = "Number of ASVs (%)") +
+  ylim(0, 1) +
+  ggtitle("Phylum Composition of Samples")
+
+  if (num_samples < 6) {
+    phyla <- phyla + guides(fill=guide_legend(ncol=3))
+  }
+
+phyla
+```
+
+#### Interactive
+
+
+```{r phylum_interactive, echo = FALSE}
+ggplotly(phyla) %>%
+  layout(yaxis = list(tickmode="auto", nticks=5, automargin = TRUE, automargin = TRUE),
+         xaxis = list(automargin = TRUE),
+         margin = list(b = "auto", l = "auto", r = "auto"))
+```
+
+
+
+### Class-level composition {.tabset .tabset-fade }
+
+*Minor classes* group all classes that did not reach a minimum of 2% of the whole community in any sample.
+
+
+```{r class_graph, echo = FALSE}
+tmp_otus_class <- agg(physeq, Class)
+high_otus_class <- agg_high(tmp_otus_class, Class)
+low_otus_class <- agg_low(tmp_otus_class, Class)
+
+low_otus_class$Class=as.factor("Minor classes")
+
+high_otus_class_select <- high_otus_class[, c("Sample", "Abundance", "Class")]
+
+otus_class <- rbind(high_otus_class_select, low_otus_class)
+```
+
+
+#### Static
+
+To save or view full-size, right click on the image to open the menu.
+
+
+```{r class_static, echo = FALSE, fig.width = plot_size}
+classes <- ggplot(otus_class, aes(x=Sample, y= Abundance, fill = Class)) +
+  geom_bar(stat = "identity", color="black") +
+  theme_light() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),
+        legend.position = "bottom",
+        legend.key = element_rect(linewidth = 0.05),
+        legend.text = element_text(size = 6)) +
+  labs(x = "Number of sequences", y = "Number of ASVs (%)") +
+  ylim(0, 1) +
+  ggtitle("Class Composition of Samples")
+
+  if (num_samples < 6) {
+    classes <- classes + guides(fill=guide_legend(ncol=3))
+  }
+
+classes
+```
+
+
+#### Interactive
+
+
+```{r class_interactive, echo = FALSE}
+ggplotly(classes) %>%
+  layout(yaxis = list(tickmode="auto", nticks=5, automargin = TRUE, automargin = TRUE),
+         xaxis = list(automargin = TRUE),
+         margin = list(b = "auto", l = "auto", r = "auto"))
+```
+
+
+### Order-level composition {.tabset .tabset-fade }
+
+*Minor orders* group all orders that did not reach a minimum of 2% of the whole community in any sample.
+
+
+```{r order_graph, echo = FALSE}
+tmp_otus_order <- agg(physeq, Order)
+high_otus_order <- agg_high(tmp_otus_order, Order)
+low_otus_order <- agg_low(tmp_otus_order, Order)
+
+low_otus_order$Order=as.factor("Minor orders")
+
+high_otus_order_select <- high_otus_order[, c("Sample", "Abundance", "Order")]
+
+otus_order <- rbind(high_otus_order_select, low_otus_order)
+```
+
+
+#### Static
+
+To save or view full-size, right click on the image to open the menu.
+
+
+```{r order_static, echo = FALSE, fig.width = plot_size}
+orders <- ggplot(otus_order, aes(x=Sample, y= Abundance, fill = Order)) +
+  geom_bar(stat = "identity", color="black") +
+  theme_light() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),
+        legend.position = "bottom",
+        legend.key = element_rect(linewidth = 0.05),
+        legend.text = element_text(size = 6)) +
+  labs(x = "Number of sequences", y = "Number of ASVs (%)") +
+  ylim(0, 1) +
+  ggtitle("Order Composition of Samples")
+
+  if (num_samples < 6) {
+    orders <- orders + guides(fill=guide_legend(ncol=3))
+  }
+
+orders
+```
+
+#### Interactive
+
+
+```{r order_interactive, echo = FALSE}
+ggplotly(orders) %>%
+  layout(yaxis = list(tickmode="auto", nticks=5, automargin = TRUE, automargin = TRUE),
+         xaxis = list(automargin = TRUE),
+         margin = list(b = "auto", l = "auto", r = "auto"))
+```
+
+
+### Family-level composition {.tabset .tabset-fade }
+
+*Minor families* group all families that did not reach a minimum of 2% of the whole community in any sample.
+
+
+```{r family_graph, echo = FALSE}
+tmp_otus_family <- agg(physeq, Family)
+high_otus_family <- agg_high(tmp_otus_family, Family)
+low_otus_family <- agg_low(tmp_otus_family, Family)
+
+low_otus_family$Family=as.factor("Minor families")
+
+high_otus_family_select <- high_otus_family[, c("Sample", "Abundance", "Family")]
+
+otus_family <- rbind(high_otus_family_select, low_otus_family)
+```
+
+
+#### Static
+
+To save or view full-size, right click on the image to open the menu.
+
+
+```{r family_static, echo = FALSE, fig.width = plot_size}
+families <- ggplot(otus_family, aes(x=Sample, y= Abundance, fill = Family)) +
+  geom_bar(stat = "identity", color="black") +
+  theme_light() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),
+        legend.position = "bottom",
+        legend.key = element_rect(linewidth = 0.05),
+        legend.text = element_text(size = 6)) +
+  labs(x = "Number of sequences", y = "Number of ASVs (%)") +
+  ylim(0, 1) +
+  ggtitle("Family Composition of Samples")
+
+  if (num_samples < 6) {
+    families <- families + guides(fill=guide_legend(ncol=3))
+  }
+
+families
+```
+
+
+#### Interactive
+
+
+```{r family_interactive, echo = FALSE}
+ggplotly(families) %>%
+  layout(yaxis = list(tickmode="auto", nticks=5, automargin = TRUE, automargin = TRUE),
+         xaxis = list(automargin = TRUE),
+         margin = list(b = "auto", l = "auto", r = "auto"))
+```
+
+
+## Alpha diversity
+
+```{r summary, echo = FALSE, results='show', warning=FALSE, eval = F}
+require(kableExtra)
+summary_table <- read.table(file="postprocessing/analysis.summary", header=F, stringsAsFactors = TRUE, sep = "\t", quote="")
+names(summary_table) <- c("Analysis parameter", "Value")
+
+if (knitr::opts_knit$get("rmarkdown.pandoc.to") == "latex") {
+  kable(summary_table, format = "latex", booktabs = T, linesep = "") %>%
+    kable_styling(full_width = TRUE, latex_options = c("striped")) %>%
+    row_spec(0, bold = TRUE) %>%
+    column_spec(1, bold = TRUE)%>%
+    column_spec(2, width = "7.8cm")
+} else if (knitr::opts_knit$get("rmarkdown.pandoc.to") == "html") {
+  kable(summary_table, format = "html", booktabs = T, linesep = "") %>%
+    kable_styling(bootstrap_options = c("hover", "responsive")) %>%
+    row_spec(0, bold = TRUE) %>%
+    column_spec(1, bold = TRUE, width_min = "5cm") %>%
+    column_spec(2)
+}
+```
+
+
+```{r echo = FALSE, results='show', message = FALSE}
+alpha(physeq, 
+      index = c("observed", 
+                "chao1", 
+                "diversity_inverse_simpson",
+                "diversity_shannon", 
+                "diversity_coverage", 
+                "evenness_pielou")) %>%
+  mutate(across(where(is.numeric), ~ round(.x, 2))) %>%
+  
+  rownames_to_column(var = "Sample") %>% 
+  DT::datatable(rownames = F)
+```
+
+
+```{asis echo = (num_samples > 5)}
+## Ordination analyses - Beta diversity
+
+Ordination analyses aim to summarize and present multivariate data to display differences between samples graphically into fewer dimensions than the original data set.
+
+Most ordination methods used in ecology rely on the prior calculation of (dis)similarity or distance metrics. This script automatically calculates the Bray-Curtis dissimilarity as well as the unweighted and weighted UniFrac distances (if a tree was provided). More details in their respective sections.
+
+This script incorporates ***principal coordinates analysis*** (PCoA) and ***non-metric multidimensional scaling*** (NMDS) as default ordination methods.
+
+The *principal coordinates analysis* (PCoA) is a metric method requiring The goal of PCoA is to fit the multivariate data in the minimum number of dimensions (eigenvectors). Percentage values in the axes, represent the proportion of all the variance in the dataset that can be explained by that giben axis.
+
+The *non-metric multidimensional scaling* (NMDS) is a rank-based approach that attempts to represent the original position of the data in the most accurate way possible using a reduced number of dimensions (often two) for easy visualisation. Because the use of ranks instead of distances, NMDS does not have a proportion of variance associated to each of its axis. The difference between the multidimensional space and the representation in the reduced dimension is represented by the *stress* value. The lower the stress value is, the better the NMDS represents the multidimensional space. Ideal values are <=0.05, while values >0.2 should be taken with care. Stress >0.3 should be considered as a random representation of the original data.
+
+If you would like to expand the above concepts, the [GUSTA ME](https://sites.google.com/site/mb3gustame/) website is a one of the recommended options.
+```
+
+```{r ord_fx, echo = FALSE, eval = (num_samples > 5)}
+dist = c("bray", "unifrac", "wunifrac")
+ord_meths = c("PCoA", "NMDS")
+
+my_ord_plot <- function(physeq, mydist, mymethod, print = FALSE) {
+  myord = ordinate(physeq, method = mymethod, distance = mydist)
+    if (mydist == "bray") {
+    mytxt <- print("Bray-Curtis")
+  } else if (mydist == "unifrac") {
+    mytxt <- print("UniFrac (unweighted)")
+  } else if (mydist == "wunifrac") {
+    mytxt <- print("UniFrac (weighted)")
+  } else {
+    exit
+  }
+
+  if (mymethod == "PCoA") {
+    print("Generating PCoA plot")
+    df <- as.data.frame(myord$vectors)
+    df$SampleID <- rownames(df)
+    z = ggplot(data = df, aes(label=SampleID)) +
+          geom_point(aes(x=Axis.1, y=Axis.2, fill = SampleID), size = 2.5, alpha = 0.8) +
+          labs(title = paste0(mytxt, " | ", mymethod),
+               x = paste0("PCo1 [", round(myord$values$Relative_eig[1] * 100, 2), "%]"),
+               y = paste0("PCo2 [", round(myord$values$Relative_eig[2] * 100, 2), "%]")) +
+          guides(fill = guide_legend(override.aes=list(shape=21)))
+
+    z
+  } else if (mymethod == "NMDS") {
+    print("Generating NMDS plot")
+    df <- as.data.frame(myord$points)
+    df$SampleID <- rownames(df)
+    stress_val <- round(myord$stress * 100, 2)
+    z = ggplot(data = df, aes(label=SampleID)) +
+          geom_point(aes(x=MDS1, y=MDS2, fill = SampleID), size = 2.5, alpha = 0.8) +
+          labs(title = paste0(mytxt, " | ", mymethod, " [stress = ", stress_val, "%]"),
+               x = "NMDS1",
+               y = "NMDS2") +
+          guides(fill = guide_legend(override.aes=list(shape=21)))
+    z
+  }
+}
+```
+
+
+```{asis echo = (num_samples > 5)}
+### Bray-Curtis dissimilarity {.tabset .tabset-fade }
+
+The Bray-Curtis dissimilarity metric informs about how different samples are to each other. Unlike other measures, Bray-Curtis is better at handling sparse matrices (i.e. tables with a large proportion of zeroes) commonly found in ecological data sets  (e.g. OTU tables).
+```
+
+```{r bc_pcoa, echo = FALSE, eval = (num_samples > 5), fig.show= "asis", include=FALSE}
+myplot1 <- my_ord_plot(physeq, dist[1], ord_meths[1])
+myplot2 <- my_ord_plot(physeq, dist[1], ord_meths[2])
+```
+
+```{asis echo = (num_samples > 5)}
+#### PCoA
+```
+
+```{r bc_pcoa_plot, echo = FALSE, eval = (num_samples > 5)}
+ggplotly(myplot1)
+```
+
+
+```{asis echo = (num_samples > 5)}
+#### NMDS
+```
+
+```{r bc_nmds, echo = FALSE, eval = (num_samples > 5)}
+ggplotly(myplot2)
+```
+
+
+
+```{asis echo = (params$treefile != "" & num_samples > 5)}
+### UniFrac (unweighted) {.tabset .tabset-fade }
+
+The UniFrac method measures the phylogenetic distance between samples based on the phylogeny of the constituent taxa. UniFrac uses the fraction of the branch length of the tree that leads to taxa that can be used to discriminate between samples. The original, ***unweighted UniFrac*** is a qualitative method (presence/absence of taxa) and might place too much weight on rare taxa.
+```
+
+```{r uf_pcoa, echo = FALSE, eval = (params$treefile != "" & num_samples > 5), fig.show= "asis", include=FALSE}
+mytree <- read_tree(params$treefile)
+
+myphyseq <- phyloseq(otu_table(physeq), tax_table(physeq), phy_tree(mytree))
+
+myplot1 <- my_ord_plot(myphyseq, dist[2], ord_meths[1])
+myplot2 <- my_ord_plot(myphyseq, dist[2], ord_meths[2])
+```
+
+```{asis echo = (params$treefile != "" & num_samples > 5)}
+#### PCoA
+```
+
+```{r uf_pcoa_plot, echo = FALSE, eval = (params$treefile != "" & num_samples > 5)}
+ggplotly(myplot1)
+```
+
+
+```{asis echo = (params$treefile != "" & num_samples > 5)}
+#### NMDS
+```
+
+```{r uf_nmds, echo = FALSE, eval = (params$treefile != "" & num_samples > 5)}
+ggplotly(myplot2)
+```
+
+```{asis echo = (params$treefile != "" & num_samples > 5)}
+### UniFrac (weighted) {.tabset .tabset-fade }
+
+The ***weighted UniFrac*** method is based on the same principles as the unweighted UniFrac. However, unlike the latter, it takes into account the abundance of the the different taxa. Thus, the weighted UniFrac is quantitative and places more weight on the abundant members of the community.
+```
+
+```{r wuf_pcoa, echo = FALSE, eval = (params$treefile != "" & num_samples > 5), fig.show= "asis", include=FALSE}
+myplot1 <- my_ord_plot(myphyseq, dist[3], ord_meths[1])
+myplot2 <- my_ord_plot(myphyseq, dist[3], ord_meths[2])
+```
+
+```{asis echo = (params$treefile != "" & num_samples > 5)}
+#### PCoA
+```
+
+```{r wuf_pcoa_plot, echo = FALSE, eval = (params$treefile != "" & num_samples > 5)}
+ggplotly(myplot1)
+```
+
+
+```{asis echo = (params$treefile != "" & num_samples > 5)}
+#### NMDS
+```
+
+```{r wuf_nmds, echo = FALSE, eval = (params$treefile != "" & num_samples > 5)}
+ggplotly(myplot2)
+```
+
