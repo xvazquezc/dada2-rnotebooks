@@ -13,7 +13,7 @@ params:
   cpus: 8 #DO NOT QUOTE
   cutadapt_path: "/apps/z_install_tree/linux-rocky8-ivybridge/gcc-12.2.0/cutadapt-4.3-h7up35wj3xjo6pfjkkevxbkqd764obtw/bin/cutadapt"
   cdhit_path: "/apps/z_install_tree/linux-rocky8-ivybridge/gcc-12.2.0/cdhit-4.8.1-d3fwnap7tmcfkp2h46bxgntfddriozt5/bin" #to the binaries folder not the executable
-  db_train: "/srv/scratch/ferrari/utils/silva_nr99_v138.1_train_set.fa.gz"
+  db_train: "/srv/scratch/ferrari/utils/silva_nr99_v138.2_toGenus_trainset.fa.gz"
   db_assign: ""
 ---
 
