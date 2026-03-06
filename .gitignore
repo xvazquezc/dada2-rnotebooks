@@ -50,3 +50,4 @@ rsconnect/
 
 # R notebook output
 *.nb.html
+*.html
