@@ -19,6 +19,13 @@ fontsize: 12pt
 params:
   krona_path: "/home/xabi/miniconda3/envs/otureporter/bin" #path to the krona executables
   treefile: "/home/xabi/Desktop/other/micro-course2026/ASVs.mafft.fasttree_lg-gamma.tree" #full path to tree file
+  rmChloro: TRUE   # remove Chloroplast (Order)
+  rmMito: TRUE     # remove Mitochondria (Family)
+  rmEuk: FALSE     # remove Eukaryota (Domain)
+  rmBac: FALSE     # remove Bacteria (Domain)
+  rmArch: FALSE    # remove Archaea (Domain)
+  rmNADom: TRUE    # remove NA Domain
+  isITS: FALSE     # if TRUE, keep only kingdom Fungi and skip other filters
 ---
 
 
@@ -90,6 +97,80 @@ num_samples <- ncol(physeq@otu_table)
 # } else {
 #   tree = TRUE
 # }
+```
+
+
+```{r filter_taxa, include=FALSE, echo = FALSE}
+# Detect whether taxonomy uses "Kingdom" or "Domain"
+tax_ranks <- rank_names(physeq)
+dom_col <- if ("Domain" %in% tax_ranks) "Domain" else if ("Kingdom" %in% tax_ranks) "Kingdom" else NULL
+
+ntaxa_before <- ntaxa(physeq)
+removed_msgs <- c()
+
+if (params$isITS) {
+  # ITS mode: keep only Fungi, ignore all other filter params
+  if (!is.null(dom_col)) {
+    tax_df <- as.data.frame(tax_table(physeq))
+    keep <- !is.na(tax_df[[dom_col]]) & tax_df[[dom_col]] == "Fungi"
+    physeq <- prune_taxa(keep, physeq)
+    removed_msgs <- c(removed_msgs, "non-Fungi (ITS mode)")
+  }
+} else {
+  if (params$rmChloro && "Order" %in% tax_ranks) {
+    physeq <- subset_taxa(physeq, Order != "Chloroplast")
+    removed_msgs <- c(removed_msgs, "Chloroplast (Order)")
+  }
+
+  if (params$rmMito && "Family" %in% tax_ranks) {
+    physeq <- subset_taxa(physeq, Family != "Mitochondria")
+    removed_msgs <- c(removed_msgs, "Mitochondria (Family)")
+  }
+
+  if (!is.null(dom_col)) {
+    tax_df <- as.data.frame(tax_table(physeq))
+
+    if (params$rmEuk) {
+      keep <- is.na(tax_df[[dom_col]]) | !tax_df[[dom_col]] %in% c("Eukaryota", "Eukarya")
+      physeq <- prune_taxa(keep, physeq)
+      removed_msgs <- c(removed_msgs, "Eukaryota (Domain)")
+    }
+
+    if (params$rmBac) {
+      tax_df <- as.data.frame(tax_table(physeq))
+      keep <- is.na(tax_df[[dom_col]]) | tax_df[[dom_col]] != "Bacteria"
+      physeq <- prune_taxa(keep, physeq)
+      removed_msgs <- c(removed_msgs, "Bacteria (Domain)")
+    }
+
+    if (params$rmArch) {
+      tax_df <- as.data.frame(tax_table(physeq))
+      keep <- is.na(tax_df[[dom_col]]) | tax_df[[dom_col]] != "Archaea"
+      physeq <- prune_taxa(keep, physeq)
+      removed_msgs <- c(removed_msgs, "Archaea (Domain)")
+    }
+
+    if (params$rmNADom) {
+      tax_df <- as.data.frame(tax_table(physeq))
+      keep <- !is.na(tax_df[[dom_col]])
+      physeq <- prune_taxa(keep, physeq)
+      removed_msgs <- c(removed_msgs, "NA (Domain)")
+    }
+  }
+}
+
+ntaxa_after <- ntaxa(physeq)
+num_samples <- nsamples(physeq)
+```
+
+```{r filter_taxa_report, echo = FALSE, results='asis'}
+if (length(removed_msgs) > 0) {
+  cat("**Taxa filtering applied.** Removed:", paste(removed_msgs, collapse = ", "), "\n\n")
+  cat(sprintf("ASVs before filtering: **%d** | after filtering: **%d** (%d removed)\n\n",
+              ntaxa_before, ntaxa_after, ntaxa_before - ntaxa_after))
+} else {
+  cat("**No taxa filtering applied.**\n\n")
+}
 ```
 
 
