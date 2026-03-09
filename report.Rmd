@@ -306,8 +306,8 @@ if (!file.exists(kt_exe)) {
 }
 
 if (krona_ok) {
-  otu   <- as.data.frame(otu_table(physeq))
-  tax   <- as.data.frame(tax_table(physeq))
+  otu <- as.data.frame(otu_table(physeq))
+  tax <- as.data.frame(tax_table(physeq))
 
   if (!taxa_are_rows(physeq)) {
     otu <- as.data.frame(t(otu))
@@ -352,6 +352,7 @@ if (krona_ok) {
                  "-o", shQuote(html_out))
     status <- system(cmd)
     if (status == 0) {
+      file.remove(krona_files)
       rel_path <- file.path("krona", "krona_all_samples.html")
       cat(paste0('* <a href="', rel_path, '" target="_blank">',
                  'Interactive Krona plot (all samples)</a>.\n'))
