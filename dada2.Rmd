@@ -9,7 +9,7 @@ params:
   rev_pat: "R2(_001){0,1}.fastq.gz"
   fname_regex: "-MEL17453A[:digit:]{1,}-AAHLCF3M5_S[:digit:]{1,}_L001_R1_001\\.fastq\\.gz"
   read_len: 300 #DO NOT QUOTE
-  isits: FALSE
+  isITS: FALSE
   cpus: 8 #DO NOT QUOTE
   cutadapt_path: "/apps/z_install_tree/linux-rocky8-ivybridge/gcc-12.2.0/cutadapt-4.3-h7up35wj3xjo6pfjkkevxbkqd764obtw/bin/cutadapt"
   cdhit_path: "/apps/z_install_tree/linux-rocky8-ivybridge/gcc-12.2.0/cdhit-4.8.1-d3fwnap7tmcfkp2h46bxgntfddriozt5/bin" #to the binaries folder not the executable
@@ -444,7 +444,7 @@ write.table(asv_tab, "ASVs_counts.tsv", sep = "\t", quote = FALSE, row.names = F
 
 
 ```{r export_tax}
-if(params$isits != TRUE) {
+if(params$isITS != TRUE) {
   asv_tax_fix <-
     asv_tax %>%
     dplyr::mutate(Genus = ifelse(!is.na(Genus), Genus,
@@ -469,7 +469,7 @@ if(params$isits != TRUE) {
                                   paste("unclassified", Domain, sep = "_")))
   
   write.table(asv_tax_fix, "ASVs_taxonomy.tsv", sep = "\t", quote=F, row.names = F)
-} else if(params$isits == TRUE) {
+} else if(params$isITS == TRUE) {
   asv_tax_fix <-
     as.data.frame(asv_tax) %>%
     dplyr::mutate(
