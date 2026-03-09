@@ -343,9 +343,9 @@ plot_size <- max(5, num_samples * 0.2)
 
 agg <- function(x, y){
   x %>%
-    tax_glom(taxrank = quo_name(enquo(y))) %>%           # agglomerate at family level
-    transform_sample_counts(function(x) {x/sum(x)} ) %>% # Transform to rel. abundance
-    psmelt()
+    speedyseq::tax_glom(taxrank = quo_name(enquo(y))) %>%           # agglomerate at family level
+    speedyseq::transform_sample_counts(function(x) {x/sum(x)} ) %>% # Transform to rel. abundance
+    speedyseq::psmelt()
 }
 agg_high <- function(x, y){
   x %>%
