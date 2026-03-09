@@ -26,6 +26,7 @@ params:
   rmArch: FALSE    # remove Archaea (Domain)
   rmNADom: TRUE    # remove NA Domain
   isITS: FALSE     # if TRUE, keep only kingdom Fungi and skip other filters
+  skipKrona: FALSE  # mainly used to skip Krona when re-running the report generation
 ---
 
 
@@ -249,7 +250,7 @@ ggplotly(rare_plot)
 In the following sections, we provide abundance bar plots for phylum to family level for the *good samples*. Detailed composition of the samples can be consulted in the attached interactive Krona plots:
 
  <!-- for both diversity and richness and both full dataset and subsampled data -->
-```{r krona_generate, echo = FALSE, results='asis'}
+```{r krona_generate, echo = FALSE, eval = (params$skipKrona == FALSE), results='asis'}
 krona_dir <- file.path(getwd(), "krona")
 dir.create(krona_dir, showWarnings = FALSE, recursive = TRUE)
 
