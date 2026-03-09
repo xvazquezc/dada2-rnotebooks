@@ -27,6 +27,7 @@ params:
   rmNADom: TRUE    # remove NA Domain
   isITS: FALSE     # if TRUE, keep only kingdom Fungi and skip other filters
   skipKrona: FALSE  # mainly used to skip Krona when re-running the report generation
+  badThreshold: 10000 # threshold for flagging samples with low read counts after filtering
 ---
 
 
@@ -224,11 +225,11 @@ read_track_long <- read_track %>%
 ```
 
 
-The following samples had less than 10000 read counts after all filtering. Discretion is advised when analysing those samples.
+The following samples had less than `r params$badThreshold` read counts after all filtering. Discretion is advised when analysing those samples.
 
 ```{r echo = FALSE,}
 filtered_counts %>% 
-  filter(taxa_filtered < 10000) %>% 
+  filter(taxa_filtered < params$badThreshold) %>% 
   DT::datatable(rownames = F)
 ```
 
@@ -239,7 +240,7 @@ filtered_counts %>%
 ```{r echo = FALSE}
 x = ggplot(read_track_long, aes(x = step, y = reads, group = Sample, color = Sample)) +
   geom_line() +
-  geom_hline(yintercept = 10000, alpha = 0.5, linetype = "dotted") +
+  geom_hline(yintercept = params$badThreshold, alpha = 0.5, linetype = "dotted") +
   theme_light() +
   labs(x = "Number of sequences", y = "Processing step", color = "Sample")
 
