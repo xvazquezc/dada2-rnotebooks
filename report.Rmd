@@ -191,12 +191,6 @@ if (length(removed_msgs) > 0) {
 ```
 
 
-```{r export_physeq_trim, echo = FALSE, include=FALSE}
-saveRDS(physeq, "physeq_rm_off_targets.RDS")
-```
-
-
-
 ## Read tracking {.tabset .tabset-fade }
 
 ```{r echo = FALSE, include=FALSE}
@@ -802,5 +796,15 @@ ggplotly(myplot1)
 
 ```{r wuf_nmds, echo = FALSE, eval = (params$treefile != "" & num_samples > 5)}
 ggplotly(myplot2)
+```
+
+
+
+```{r export_physeq_trim, echo = FALSE, include=FALSE}
+if (exists("myphyseq")) {
+  saveRDS(myphyseq, "physeq_rm_off_targets.RDS")
+} else {
+  saveRDS(physeq, "physeq_rm_off_targets.RDS")
+}
 ```
 
