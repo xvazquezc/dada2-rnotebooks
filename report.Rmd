@@ -173,6 +173,29 @@ if (length(removed_msgs) > 0) {
 }
 ```
 
+## Read tracking
+
+```{r}
+read_track <- read.table("read_tracking.tsv", sep = "\t", header = T)
+```
+
+
+```{r update_read_tracking, include=FALSE, echo = FALSE}
+# Build a tibble with post-filtering counts per sample
+filtered_counts <- otu_tibble(physeq) %>%
+  select(-FeatureID) %>%
+  summarise(across(everything(), sum)) %>%
+  pivot_longer(everything(), names_to = "Sample", values_to = "taxa_filtered")
+
+read_track <- read_track %>%
+  left_join(filtered_counts, by = "Sample")
+
+# Pivot to long format for ggplot2, preserving column order as factor levels
+step_order <- setdiff(colnames(read_track), "Sample")
+read_track_long <- read_track %>%
+  pivot_longer(cols = -Sample, names_to = "step", values_to = "reads") %>%
+  mutate(step = factor(step, levels = step_order))
+```
 
 
 ```{css echo = FALSE, warnings=FALSE}
