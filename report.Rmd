@@ -21,7 +21,7 @@ params:
   treefile: "/home/xabi/Desktop/other/micro-course2026/ASVs.mafft.fasttree_lg-gamma.tree" #full path to tree file
   rmChloro: TRUE   # remove Chloroplast (Order)
   rmMito: TRUE     # remove Mitochondria (Family)
-  rmEuk: FALSE     # remove Eukaryota (Domain)
+  rmEuk: TRUE     # remove Eukaryota (Domain)
   rmBac: FALSE     # remove Bacteria (Domain)
   rmArch: FALSE    # remove Archaea (Domain)
   rmNADom: TRUE    # remove NA Domain
