@@ -178,18 +178,10 @@ if (length(removed_msgs) > 0) {
 ```
 
 
-
-```{css echo = FALSE, warnings=FALSE}
-# pre code, pre, code {
-#   white-space: pre !important;
-#   overflow-x: auto !important;
-#   word-break: keep-all !important;
-#   word-wrap: initial !important;
-# }
-body .main-container {
-  max-width: 1200px;
-}
+```{r export_physeq_trim, echo = FALSE, include=FALSE}
+saveRDS(physeq, "physeq_rm_off_targets.RDS")
 ```
+
 
 
 ## Read tracking {.tabset .tabset-fade }
