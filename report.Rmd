@@ -19,14 +19,14 @@ fontsize: 12pt
 params:
   krona_path: "/home/xabi/miniconda3/envs/otureporter/bin" #path to the krona executables
   treefile: "/home/xabi/Desktop/other/micro-course2026/ASVs.mafft.fasttree_lg-gamma.tree" #full path to tree file
-  rmChloro: TRUE   # remove Chloroplast (Order)
-  rmMito: TRUE     # remove Mitochondria (Family)
-  rmEuk: TRUE     # remove Eukaryota (Domain)
-  rmBac: FALSE     # remove Bacteria (Domain)
-  rmArch: FALSE    # remove Archaea (Domain)
-  rmNADom: TRUE    # remove NA Domain
-  isITS: FALSE     # if TRUE, keep only kingdom Fungi and skip other filters
-  skipKrona: FALSE  # mainly used to skip Krona when re-running the report generation
+  rmChloro: TRUE      # remove Chloroplast (Order)
+  rmMito: TRUE        # remove Mitochondria (Family)
+  rmEuk: TRUE         # remove Eukaryota (Domain)
+  rmBac: FALSE        # remove Bacteria (Domain)
+  rmArch: FALSE       # remove Archaea (Domain)
+  rmNADom: TRUE       # remove NA Domain
+  isITS: FALSE        # if TRUE, keep only kingdom Fungi and skip other filters
+  skipKrona: FALSE    # mainly used to skip Krona when re-running the report generation
   badThreshold: 10000 # threshold for flagging samples with low read counts after filtering
 ---
 
